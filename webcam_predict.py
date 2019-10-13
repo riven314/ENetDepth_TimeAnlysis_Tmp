@@ -29,20 +29,35 @@ data_path = os.path.join('demo_data', 'image', '0.jpg')
 depth_path = os.path.join('demo_data', 'depth', '0.png')
 
 
-def predict(model, images, class_encoding):
+def predict_sync(model, images, class_encoding):
+    """
+    how to time properly for CUDA: https://discuss.pytorch.org/t/measuring-gpu-tensor-operation-speed/2513/2
+    """
     # measure time to upload from CPU to GPU
-    start = time.time()
     images = images.to(device)
-    end = time.time()
-    print('upload gpu time: {} s'.format(end - start))
+    # finish before start measuring time
+    torch.cuda.synchronize()
     # measure time for model inference
+    start = time.perf_counter()
+    model.eval()
+    with torch.no_grad():
+        predictions = model(images)
+    torch.cuda.synchronize()
+    end = time.perf_counter()
+    t = end - start
+    print('model inference time: {} s'.format(t))
+    return predictions, t
+
+def predict_async(model, images, class_encoding):
+    images = images.to(device)
     start = time.time()
     model.eval()
     with torch.no_grad():
         predictions = model(images)
     end = time.time()
-    print('model inference time: {} s'.format(end - start))
-    return predictions
+    t = end - start
+    print('model inference time: {} s'.format(t))
+    return predictions, t
 
 
 def process_predict(predictions, class_encoding):
@@ -63,6 +78,7 @@ def setup_model():
     model = ENetDepth(num_classes).to(device)
     optimizer = optim.Adam(model.parameters())
     model = utils.load_checkpoint(model, optimizer, 'save', 'ENetDepth-scannet20')[0]
+    model.eval()
     return model, class_encoding
 
 
@@ -96,6 +112,10 @@ def scannet_loader_depth(data_path, depth_path, color_mean = [0.,0.,0.], color_s
 model, class_encoding = setup_model()
 image = scannet_loader_depth(data_path, depth_path, color_mean = color_mean, color_std = color_std)
 image=image.unsqueeze(dim = 0)
-for i in range(10):
-    predictions = predict(model, image, class_encoding)
+print('image size = {}'.format(image.shape))
+t_ls = []
+for i in range(20):
+    predictions, t = predict_sync(model, image, class_encoding)
+    t_ls.append(t)
 color_predictions = process_predict(predictions, class_encoding)
+print('\n\nAvg inference speed: {} s'.format(np.mean(t_ls[1:])))
