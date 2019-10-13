@@ -25,8 +25,6 @@ device = torch.device('cuda')
 # Mean color, standard deviation (R, G, B)
 color_mean = [0.496342, 0.466664, 0.440796]
 color_std = [0.277856, 0.286230, 0.291129]
-data_path = os.path.join('demo_data', 'image', '0.jpg')
-depth_path = os.path.join('demo_data', 'depth', '0.png')
 
 
 def predict_sync(model, images, class_encoding):
@@ -108,14 +106,25 @@ def scannet_loader_depth(data_path, depth_path, color_mean = [0.,0.,0.], color_s
         data = torch.cat((rgb, depth), 0)
         return data
 
+def speed_test(data_path, depth_path, n = 20):
+    global color_mean
+    global color_std
+    model, class_encoding = setup_model()
+    image = scannet_loader_depth(data_path, depth_path, color_mean = color_mean, color_std = color_std)
+    image=image.unsqueeze(dim = 0)
+    print('\n\nimage size = {}'.format(image.shape))
+    t_ls = []
+    for i in range(n):
+        predictions, t = predict_sync(model, image, class_encoding)
+        t_ls.append(t)
+    color_predictions = process_predict(predictions, class_encoding)
+    print('\n\nAvg inference speed: {} s'.format(np.mean(t_ls[1:])))
 
-model, class_encoding = setup_model()
-image = scannet_loader_depth(data_path, depth_path, color_mean = color_mean, color_std = color_std)
-image=image.unsqueeze(dim = 0)
-print('image size = {}'.format(image.shape))
-t_ls = []
-for i in range(20):
-    predictions, t = predict_sync(model, image, class_encoding)
-    t_ls.append(t)
-color_predictions = process_predict(predictions, class_encoding)
-print('\n\nAvg inference speed: {} s'.format(np.mean(t_ls[1:])))
+
+if __name__ == '__main__':
+    rgb_ls = ['small_rgb.jpg', 'medium_rgb.jpg', 'big_rgb.jpg']
+    depth_ls = ['small_depth.png', 'medium_depth.png', 'big_depth.png']
+    for rgb_f, depth_f in zip(rgb_ls, depth_ls):
+        data_path = os.path.join('demo_data', 'image', rgb_f)
+        depth_path = os.path.join('demo_data', 'depth', depth_f)
+        speed_test(data_path, depth_path, n = 10)
