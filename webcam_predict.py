@@ -115,7 +115,7 @@ def speed_test(data_path, depth_path, n = 20):
     print('\n\nimage size = {}'.format(image.shape))
     t_ls = []
     for i in range(n):
-        predictions, t = predict_sync(model, image, class_encoding)
+        predictions, t = predict_async(model, image, class_encoding)
         t_ls.append(t)
     color_predictions = process_predict(predictions, class_encoding)
     print('\n\nAvg inference speed: {} s'.format(np.mean(t_ls[1:])))
